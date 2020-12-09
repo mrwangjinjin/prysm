@@ -20,6 +20,7 @@ import (
 	stateTrie "github.com/prysmaticlabs/prysm/beacon-chain/state"
 	dbpb "github.com/prysmaticlabs/prysm/proto/beacon/db"
 	attaggregation "github.com/prysmaticlabs/prysm/shared/aggregation/attestations"
+	"github.com/prysmaticlabs/prysm/shared/attestationutil"
 	"github.com/prysmaticlabs/prysm/shared/bytesutil"
 	"github.com/prysmaticlabs/prysm/shared/featureconfig"
 	"github.com/prysmaticlabs/prysm/shared/hashutil"
@@ -587,11 +588,11 @@ func (vs *Server) filterAttestationsForBlockInclusion(ctx context.Context, state
 	ctx, span := trace.StartSpan(ctx, "ProposerServer.filterAttestationsForBlockInclusion")
 	defer span.End()
 
-	validAtts, invalidAtts := proposerAtts(atts).filter(ctx, state)
+	validAtts, invalidAtts := attestationutil.List(atts).SplitForProposer(ctx, state)
 	if err := vs.deleteAttsInPool(ctx, invalidAtts); err != nil {
 		return nil, err
 	}
-	return validAtts.sortByProfitability().limitToMaxAttestations(), nil
+	return validAtts.SortByProfitability().LimitToMaxAttestations(), nil
 }
 
 // The input attestations are processed and seen by the node, this deletes them from pool
@@ -661,7 +662,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState *stateTrie.B
 			attsByDataRoot[attDataRoot] = append(attsByDataRoot[attDataRoot], att)
 		}
 
-		attsForInclusion := proposerAtts(make([]*ethpb.Attestation, 0))
+		attsForInclusion := attestationutil.List(make([]*ethpb.Attestation, 0))
 		for _, as := range attsByDataRoot {
 			as, err := attaggregation.Aggregate(as)
 			if err != nil {
@@ -669,7 +670,7 @@ func (vs *Server) packAttestations(ctx context.Context, latestState *stateTrie.B
 			}
 			attsForInclusion = append(attsForInclusion, as...)
 		}
-		atts = attsForInclusion.sortByProfitability().limitToMaxAttestations()
+		atts = attsForInclusion.SortByProfitability().LimitToMaxAttestations()
 	}
 	return atts, nil
 }
